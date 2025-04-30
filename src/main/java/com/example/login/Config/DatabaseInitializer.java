@@ -6,12 +6,15 @@ import com.example.login.Models.Role;
 import com.example.login.Repositories.AdministrateurRepository;
 import com.example.login.Repositories.EmployeSimpleRepository;
 import com.example.login.Repositories.RoleRepository;
+
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,15 +41,30 @@ public class DatabaseInitializer implements CommandLineRunner {
         // Initialize roles
         initializeRoles();
         
-        // Check if admin exists
-        Optional<EmployeSimple> existingAdmin = employeSimpleRepository.findByEmailPro("admin@company.com");
+        // Check if admin exists - use List to handle multiple results
+        List<EmployeSimple> existingAdmins = employeSimpleRepository.findAllByEmailPro("admin@company.com");
         
-        if (existingAdmin.isEmpty()) {
+        if (existingAdmins.isEmpty()) {
             // Create default admin user
             createDefaultAdmin();
+        } else if (existingAdmins.size() > 1) {
+            // Keep the first admin and delete the others
+            EmployeSimple adminToKeep = existingAdmins.get(0);
+            for (int i = 1; i < existingAdmins.size(); i++) {
+                EmployeSimple duplicateAdmin = existingAdmins.get(i);
+                
+                // If there's an associated Administrateur record, delete it first
+                Optional<Administrateur> adminRecord = administrateurRepository.findById(duplicateAdmin.getIdEmploye());
+                adminRecord.ifPresent(administrateur -> administrateurRepository.delete(administrateur));
+                
+                // Then delete the employee record
+                employeSimpleRepository.delete(duplicateAdmin);
+            }
+            System.out.println("Cleaned up duplicate admin entries, kept: " + adminToKeep.getEmailPro());
+        } else {
+            System.out.println("Admin user exists");
         }
     }
-    
     private void initializeRoles() {
         createRoleIfNotExists("ADMIN", "Administrator role");
         createRoleIfNotExists("RH", "Human Resources role");

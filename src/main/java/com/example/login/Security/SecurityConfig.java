@@ -43,13 +43,12 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        return email -> employeSimpleRepository.findByEmailPro(email)
-                .or(() -> employeSimpleRepository.findByEmailPerso(email))
+        return email -> employeSimpleRepository.findByEmailProWithRole(email)
+                .or(() -> employeSimpleRepository.findByEmailPersoWithRole(email))
                 .map(employeSimple -> {
-                    // Get the role
                     Role role = employeSimple.getRole();
                     String roleName = role != null ? role.getNomRole() : "USER";
-
+    
                     return User.builder()
                             .username(employeSimple.getEmailPro())
                             .password(employeSimple.getMotDePasse())
@@ -58,7 +57,6 @@ public class SecurityConfig {
                 })
                 .orElseThrow(() -> new RuntimeException("Utilisateur non trouvé"));
     }
-
     @Bean
     public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
         AuthenticationManagerBuilder authenticationManagerBuilder =

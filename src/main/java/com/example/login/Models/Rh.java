@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Date;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @Getter
 @Setter
 @Entity
@@ -21,6 +23,7 @@ public class Rh {
 
     @OneToOne
     @JoinColumn(name = "id_employe", referencedColumnName = "idEmploye", insertable = false, updatable = false)
+    @JsonIgnoreProperties({"administrateur", "configurateur", "rh"})
     private EmployeSimple employeSimple;
 
 }
