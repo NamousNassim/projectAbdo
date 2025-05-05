@@ -6,16 +6,17 @@ import com.example.login.Models.Role;
 import com.example.login.Repositories.AdministrateurRepository;
 import com.example.login.Repositories.EmployeSimpleRepository;
 import com.example.login.Repositories.RoleRepository;
-
+import com.example.login.Repositories.ConfigurateurRepository;
+import com.example.login.Repositories.RhRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -24,47 +25,74 @@ public class DatabaseInitializer implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final EmployeSimpleRepository employeSimpleRepository;
     private final AdministrateurRepository administrateurRepository;
+    private final ConfigurateurRepository configurateurRepository;
+    private final RhRepository rhRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
     
     @Autowired
     public DatabaseInitializer(
             RoleRepository roleRepository, 
             EmployeSimpleRepository employeSimpleRepository,
-            AdministrateurRepository administrateurRepository) {
+            AdministrateurRepository administrateurRepository,
+            ConfigurateurRepository configurateurRepository,
+            RhRepository rhRepository,
+            PasswordEncoder passwordEncoder,
+            JdbcTemplate jdbcTemplate) {
         this.roleRepository = roleRepository;
         this.employeSimpleRepository = employeSimpleRepository;
         this.administrateurRepository = administrateurRepository;
+        this.configurateurRepository = configurateurRepository;
+        this.rhRepository = rhRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
     }
     
     @Override
     @Transactional
     public void run(String... args) {
-        // Initialize roles
+        System.out.println("Starting database initialization...");
+        
+        // Delete all existing data
+        cleanDatabase();
+        
+        // Create fresh roles
         initializeRoles();
         
-        // Check if admin exists - use List to handle multiple results
-        List<EmployeSimple> existingAdmins = employeSimpleRepository.findAllByEmailPro("admin@company.com");
+        // Create default admin user
+        createDefaultAdmin();
         
-        if (existingAdmins.isEmpty()) {
-            // Create default admin user
-            createDefaultAdmin();
-        } else if (existingAdmins.size() > 1) {
-            // Keep the first admin and delete the others
-            EmployeSimple adminToKeep = existingAdmins.get(0);
-            for (int i = 1; i < existingAdmins.size(); i++) {
-                EmployeSimple duplicateAdmin = existingAdmins.get(i);
-                
-                // If there's an associated Administrateur record, delete it first
-                Optional<Administrateur> adminRecord = administrateurRepository.findById(duplicateAdmin.getIdEmploye());
-                adminRecord.ifPresent(administrateur -> administrateurRepository.delete(administrateur));
-                
-                // Then delete the employee record
-                employeSimpleRepository.delete(duplicateAdmin);
-            }
-            System.out.println("Cleaned up duplicate admin entries, kept: " + adminToKeep.getEmailPro());
-        } else {
-            System.out.println("Admin user exists");
+        System.out.println("Database initialization completed successfully");
+    }
+    
+    private void cleanDatabase() {
+        System.out.println("Cleaning database...");
+        
+        try {
+            // Temporarily disable foreign key checks
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
+            
+            // Delete many-to-many junction tables first
+            jdbcTemplate.execute("DELETE FROM societe_configurateur");
+            jdbcTemplate.execute("DELETE FROM administrateur_configurateur");
+            
+            // Delete entity tables in correct order
+            jdbcTemplate.execute("DELETE FROM configurateur");
+            jdbcTemplate.execute("DELETE FROM rh");
+            jdbcTemplate.execute("DELETE FROM administrateur");
+            jdbcTemplate.execute("DELETE FROM employe_simple");
+            jdbcTemplate.execute("DELETE FROM role");
+            
+            // Re-enable foreign key checks
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+            
+            System.out.println("Database cleaned successfully using direct SQL");
+        } catch (Exception e) {
+            System.err.println("Error cleaning database: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+    
     private void initializeRoles() {
         createRoleIfNotExists("ADMIN", "Administrator role");
         createRoleIfNotExists("RH", "Human Resources role");
@@ -73,14 +101,12 @@ public class DatabaseInitializer implements CommandLineRunner {
     }
     
     private void createRoleIfNotExists(String idRole, String description) {
-        if (roleRepository.findByIdRole(idRole).isEmpty()) {
-            Role role = new Role();
-            role.setIdRole(idRole);
-            role.setNomRole(idRole);
-            role.setDescription(description);
-            roleRepository.save(role);
-            System.out.println("Created role: " + idRole);
-        }
+        Role role = new Role();
+        role.setIdRole(idRole);
+        role.setNomRole(idRole);
+        role.setDescription(description);
+        roleRepository.save(role);
+        System.out.println("Created role: " + idRole);
     }
     
     @Transactional
@@ -96,7 +122,13 @@ public class DatabaseInitializer implements CommandLineRunner {
         adminEmployee.setNom("Admin");
         adminEmployee.setPrenom("Super");
         adminEmployee.setEmailPro("admin@company.com");
-        adminEmployee.setMotDePasse("{noop}admin123"); // Set a strong password in production
+        
+        // Use BCrypt to encode the password
+        String rawPassword = "admin123";
+        String encodedPassword = passwordEncoder.encode(rawPassword);
+        System.out.println("Admin password created with BCrypt encoding");
+        adminEmployee.setMotDePasse(encodedPassword);
+        
         adminEmployee.setRole(adminRole);
         adminEmployee.setDateCreation(new java.sql.Date(System.currentTimeMillis()));
         
@@ -114,6 +146,6 @@ public class DatabaseInitializer implements CommandLineRunner {
         // Save admin
         administrateurRepository.save(admin);
         
-        System.out.println("Created default admin user: admin@company.com");
+        System.out.println("Created default admin user: admin@company.com with password: admin123");
     }
 }
