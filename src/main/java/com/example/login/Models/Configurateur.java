@@ -23,7 +23,8 @@ public class Configurateur {
 
     private String nom;
     private String prenom;
-    private String email;
+    @Column(name = "email", unique = true)
+private String email;
     private String telephone;
     private String nomUtilisateur;
     
