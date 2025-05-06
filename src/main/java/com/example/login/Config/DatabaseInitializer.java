@@ -54,7 +54,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         System.out.println("Starting database initialization...");
         
         // Delete all existing data
-        cleanDatabase();
+     
         
         // Create fresh roles
         initializeRoles();
@@ -65,33 +65,7 @@ public class DatabaseInitializer implements CommandLineRunner {
         System.out.println("Database initialization completed successfully");
     }
     
-    private void cleanDatabase() {
-        System.out.println("Cleaning database...");
-        
-        try {
-            // Temporarily disable foreign key checks
-            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
-            
-            // Delete many-to-many junction tables first
-            jdbcTemplate.execute("DELETE FROM societe_configurateur");
-            jdbcTemplate.execute("DELETE FROM administrateur_configurateur");
-            
-            // Delete entity tables in correct order
-            jdbcTemplate.execute("DELETE FROM configurateur");
-            jdbcTemplate.execute("DELETE FROM rh");
-            jdbcTemplate.execute("DELETE FROM administrateur");
-            jdbcTemplate.execute("DELETE FROM employe_simple");
-            jdbcTemplate.execute("DELETE FROM role");
-            
-            // Re-enable foreign key checks
-            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
-            
-            System.out.println("Database cleaned successfully using direct SQL");
-        } catch (Exception e) {
-            System.err.println("Error cleaning database: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
+ 
     
     private void initializeRoles() {
         createRoleIfNotExists("ADMIN", "Administrator role");
