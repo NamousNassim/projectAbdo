@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -53,19 +55,55 @@ public class DatabaseInitializer implements CommandLineRunner {
     public void run(String... args) {
         System.out.println("Starting database initialization...");
         
-        // Delete all existing data
-     
+        // Check for duplicate admin users and clean if necessary
+        cleanDuplicateAdmins();
         
         // Create fresh roles
         initializeRoles();
         
-        // Create default admin user
-        createDefaultAdmin();
+        // Create default admin user only if it doesn't exist
+        if (!adminUserExists()) {
+            createDefaultAdmin();
+        } else {
+            System.out.println("Admin user already exists, skipping creation");
+        }
         
         System.out.println("Database initialization completed successfully");
     }
     
- 
+    private boolean adminUserExists() {
+        // Check in both EmployeSimple and Administrateur tables
+        Optional<EmployeSimple> employeAdmin = employeSimpleRepository.findByEmailPro("admin@company.com");
+        Optional<Administrateur> administrateur = administrateurRepository.findByEmail("admin@company.com");
+        
+        return employeAdmin.isPresent() || administrateur.isPresent();
+    }
+    
+    private void cleanDuplicateAdmins() {
+        try {
+            // Check for multiple admin users with the same email
+            List<Administrateur> admins = administrateurRepository.findAllByEmail("admin@company.com");
+            
+            if (admins.size() > 1) {
+                System.out.println("Found " + admins.size() + " duplicate admin users. Cleaning duplicates...");
+                
+                // Keep the first one, delete the rest
+                for (int i = 1; i < admins.size(); i++) {
+                    Administrateur admin = admins.get(i);
+                    String idToDelete = admin.getIdAdministrateur();
+                    
+                    // Delete from both tables
+                    administrateurRepository.deleteById(idToDelete);
+                    employeSimpleRepository.deleteById(idToDelete);
+                }
+                
+                System.out.println("Duplicate admin users cleaned successfully");
+            }
+        } catch (Exception e) {
+            System.err.println("Error while cleaning duplicate admins: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
     
     private void initializeRoles() {
         createRoleIfNotExists("ADMIN", "Administrator role");
@@ -75,6 +113,12 @@ public class DatabaseInitializer implements CommandLineRunner {
     }
     
     private void createRoleIfNotExists(String idRole, String description) {
+        Optional<Role> existingRole = roleRepository.findByIdRole(idRole);
+        if (existingRole.isPresent()) {
+            System.out.println("Role already exists: " + idRole);
+            return;
+        }
+        
         Role role = new Role();
         role.setIdRole(idRole);
         role.setNomRole(idRole);
